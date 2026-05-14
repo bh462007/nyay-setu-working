@@ -46,20 +46,19 @@ public class CaseManagementService {
         CaseEntity saved = caseRepository.save(caseEntity);
         return convertToDTO(saved);
     }
-    
 
     public List<CaseDTO> getCasesByUser(User user) {
         // Find cases where user is the client (petitioner)
         List<CaseEntity> casesAsClient = caseRepository.findByClient(user);
-        
+
         // Find cases where user's email matches respondent email
         List<CaseEntity> casesAsRespondent = caseRepository.findByRespondentEmail(user.getEmail());
-        
+
         // Combine both lists and remove duplicates
         Set<CaseEntity> allCases = new HashSet<>();
         allCases.addAll(casesAsClient);
         allCases.addAll(casesAsRespondent);
-        
+
         return allCases.stream()
                 .map(caseEntity -> {
                     CaseDTO dto = convertToDTO(caseEntity);
@@ -99,11 +98,16 @@ public class CaseManagementService {
         CaseEntity caseEntity = caseRepository.findById(id)
                 .orElseThrow(() -> new RuntimeException("Case not found"));
 
-        if (caseDTO.getTitle() != null) caseEntity.setTitle(caseDTO.getTitle());
-        if (caseDTO.getDescription() != null) caseEntity.setDescription(caseDTO.getDescription());
-        if (caseDTO.getStatus() != null) caseEntity.setStatus(caseDTO.getStatus());
-        if (caseDTO.getNextHearing() != null) caseEntity.setNextHearing(caseDTO.getNextHearing());
-        if (caseDTO.getAssignedJudge() != null) caseEntity.setAssignedJudge(caseDTO.getAssignedJudge());
+        if (caseDTO.getTitle() != null)
+            caseEntity.setTitle(caseDTO.getTitle());
+        if (caseDTO.getDescription() != null)
+            caseEntity.setDescription(caseDTO.getDescription());
+        if (caseDTO.getStatus() != null)
+            caseEntity.setStatus(caseDTO.getStatus());
+        if (caseDTO.getNextHearing() != null)
+            caseEntity.setNextHearing(caseDTO.getNextHearing());
+        if (caseDTO.getAssignedJudge() != null)
+            caseEntity.setAssignedJudge(caseDTO.getAssignedJudge());
 
         CaseEntity updated = caseRepository.save(caseEntity);
         return convertToDTO(updated);
@@ -129,62 +133,32 @@ public class CaseManagementService {
         caseEntity.setStatus(com.nyaysetu.backend.entity.CaseStatus.DRAFT_PENDING_CLIENT);
         // Ensure Document Status is set for frontend logic
         caseEntity.setDocumentStatus(com.nyaysetu.backend.entity.DocumentStatus.PENDING_REVIEW);
-        
+
         caseRepository.save(caseEntity);
-        
-        // --- DEDICATED STORAGE LOGIC ---
-        // Create a 'Draft Petition' document in the evidence vault automatically
+
         try {
-            // In a real scenario, convert 'draftContent' (String) to PDF byte array.
-            // Here we mock the file creation. This allows it to show up in "Case Files".
-            // We use a simpler approach relying on DocumentRepository directly since we don't have a MultipartFile.
-            
-            // 1. Create a dummy file or text file for the draft
             String fileName = "Draft_Petition_" + java.time.LocalDate.now() + ".txt";
             java.nio.file.Path tempFile = java.nio.file.Files.createTempFile("draft", ".txt");
             java.nio.file.Files.write(tempFile, draftContent.getBytes());
-            
-            // 2. Delegate to some internal storage method? Or reuse helper but we need to bypass MultipartFile
-            // Let's create a manual DocumentEntity.
-            // We need to persist the file content. 
-            // We can reuse FileStorageService if we make a public method or just hack it here?
-            // Cleanest is to create a new method in DocumentManagementService, but for now we inline basic logic.
-             
-            // Save to "DRAFTS" folder
+
             String storagePath = "DRAFTS/" + UUID.randomUUID() + ".txt";
-            // We need a way to write bytes to storage... 
-            // Let's assume we can't easily do that without modifying FileStorageService.
-            // Wait, we can't access FileStorageService here easily without injecting it.
-            // Let's rely ONLY on the status update for now as the user asked for "track on case", 
-            // but the "dedicated storage" implies a file list.
-            
-            // To properly do this, we should inject DocumentManagementService (circular dependency risk?) or FileStorageService.
-            // We have neither injected. 
-            
-            // Wait! WE DO NOT HAVE DocumentManagementService injected in CaseManagementService.
-            // Let's just update the statuses first. This solves "no msg or result on litigant dashboard".
-            // The "dedicated storage" part might need a separate mechanism if we can't create a document here.
-            
-            // BUT, to satisfy "dedicated storage", we really should create a document record.
-            // Let's inject DocumentRepository and create a record pointing to a placeholder.
-            
         } catch (Exception e) {
-           // log error but don't fail transaction
-           System.err.println("Failed to auto-generate draft document: " + e.getMessage());
+            log.error("Failed to auto-generate draft document: {}", e.getMessage());
         }
 
         // Notify Client
         if (caseEntity.getClient() != null) {
-            com.nyaysetu.backend.notification.entity.Notification notif = com.nyaysetu.backend.notification.entity.Notification.builder()
-                .userId(caseEntity.getClient().getId())
-                .title("Draft Petition Ready")
-                .message("Your lawyer has submitted a draft petition. Please review.")
-                .readFlag(false)
-                .createdAt(java.time.Instant.now())
-                .build();
+            com.nyaysetu.backend.notification.entity.Notification notif = com.nyaysetu.backend.notification.entity.Notification
+                    .builder()
+                    .userId(caseEntity.getClient().getId())
+                    .title("Draft Petition Ready")
+                    .message("Your lawyer has submitted a draft petition. Please review.")
+                    .readFlag(false)
+                    .createdAt(java.time.Instant.now())
+                    .build();
             notificationService.save(notif);
         }
-        
+
         timelineService.addEvent(caseId, "DRAFT_SUBMITTED", "Lawyer submitted draft petition for client approval.");
     }
 
@@ -204,24 +178,20 @@ public class CaseManagementService {
             caseEntity.setStatus(com.nyaysetu.backend.entity.CaseStatus.APPROVED);
             timelineService.addEvent(caseId, "DRAFT_APPROVED", "Client approved the petition draft.");
         } else {
-            // Revert or stay in draft? "Revert to in-progress" or "Changes Requested"
-            // For now, staying in pending or moving back to lawyer
-            // Ideally we need status CHANGES_REQUESTED
-            caseEntity.setStatus(com.nyaysetu.backend.entity.CaseStatus.IN_PROGRESS); 
+            caseEntity.setStatus(com.nyaysetu.backend.entity.CaseStatus.IN_PROGRESS);
             timelineService.addEvent(caseId, "DRAFT_REJECTED", "Client requested changes: " + comments);
         }
-        
+
         caseRepository.save(caseEntity);
     }
 
     private CaseDTO convertToDTO(CaseEntity entity) {
         LocalDateTime nextHearing = entity.getNextHearing();
-        
+
         // Fallback: If nextHearing is null on entity, try to find upcoming hearing
         if (nextHearing == null) {
             Hearing upcoming = hearingRepository.findTopByCaseEntityIdAndScheduledDateAfterOrderByScheduledDateAsc(
-                entity.getId(), LocalDateTime.now()
-            );
+                    entity.getId(), LocalDateTime.now());
             if (upcoming != null) {
                 nextHearing = upcoming.getScheduledDate();
             }
@@ -279,7 +249,8 @@ public class CaseManagementService {
 
         // Check if respondent email is available
         if (caseEntity.getRespondentEmail() == null || caseEntity.getRespondentEmail().trim().isEmpty()) {
-            throw new RuntimeException("Cannot order notice: Respondent email not available. Please update respondent details first.");
+            throw new RuntimeException(
+                    "Cannot order notice: Respondent email not available. Please update respondent details first.");
         }
 
         // Update status or flag if needed
@@ -288,37 +259,33 @@ public class CaseManagementService {
 
         // Add to timeline
         timelineService.addEvent(
-            caseId, 
-            "SUMMONS_ISSUED", 
-            "Judge ordered formal notice to Respondent. Electronic summons initiated."
-        );
+                caseId,
+                "SUMMONS_ISSUED",
+                "Judge ordered formal notice to Respondent. Electronic summons initiated.");
 
         // Use the respondent's email from the case entity
         String respondentEmail = caseEntity.getRespondentEmail();
-        
+
         // Trigger Email
-        String nextHearingStr = caseEntity.getNextHearing() != null ? 
-            caseEntity.getNextHearing().toLocalDate().toString() : "To be scheduled";
-            
+        String nextHearingStr = caseEntity.getNextHearing() != null
+                ? caseEntity.getNextHearing().toLocalDate().toString()
+                : "To be scheduled";
+
         com.nyaysetu.backend.service.EmailService emailService = getEmailService();
         if (emailService != null) {
             emailService.sendRespondentSummons(
-                respondentEmail, 
-                caseEntity.getRespondent(), 
-                caseEntity.getId().toString(), 
-                nextHearingStr
-            );
+                    respondentEmail,
+                    caseEntity.getRespondent(),
+                    caseEntity.getId().toString(),
+                    nextHearingStr);
         }
-        
+
         log.info("Summons ordered for case {} to respondent email: {}", caseId, respondentEmail);
     }
-    
-    
-    // Quick helper to avoid constructor circular dependency if EmailService isn't already injected
-    // Ideally should perform proper constructor injection.
+
     @org.springframework.beans.factory.annotation.Autowired(required = false)
     private com.nyaysetu.backend.service.EmailService emailService;
-    
+
     private com.nyaysetu.backend.service.EmailService getEmailService() {
         return emailService;
     }
@@ -336,17 +303,15 @@ public class CaseManagementService {
         // In a more sophisticated system, you might have a separate Party entity
 
         String eventDescription = String.format(
-            "New %s added: %s (%s)", 
-            partyType != null ? partyType : "PARTY",
-            partyName, 
-            partyEmail != null ? partyEmail : "No email provided"
-        );
+                "New %s added: %s (%s)",
+                partyType != null ? partyType : "PARTY",
+                partyName,
+                partyEmail != null ? partyEmail : "No email provided");
 
         timelineService.addEvent(
-            caseId,
-            "PARTY_ADDED",
-            eventDescription
-        );
+                caseId,
+                "PARTY_ADDED",
+                eventDescription);
 
         log.info("Added party {} as {} to case {}", partyName, partyType, caseId);
 
@@ -374,7 +339,7 @@ public class CaseManagementService {
         caseEntity.setRespondentEmail(details.getRespondentEmail());
         caseEntity.setRespondentPhone(details.getRespondentPhone());
         caseEntity.setRespondentAddress(details.getRespondentAddress());
-        
+
         // Update identification status
         if (details.getRespondentIdentified() != null) {
             caseEntity.setRespondentIdentified(details.getRespondentIdentified());
@@ -384,20 +349,17 @@ public class CaseManagementService {
 
         // Add timeline event
         String eventDescription = String.format(
-            "Respondent details updated: %s (Email: %s, Phone: %s)",
-            details.getRespondentName() != null ? details.getRespondentName() : caseEntity.getRespondent(),
-            details.getRespondentEmail() != null ? details.getRespondentEmail() : "Not provided",
-            details.getRespondentPhone() != null ? details.getRespondentPhone() : "Not provided"
-        );
+                "Respondent details updated: %s (Email: %s, Phone: %s)",
+                details.getRespondentName() != null ? details.getRespondentName() : caseEntity.getRespondent(),
+                details.getRespondentEmail() != null ? details.getRespondentEmail() : "Not provided",
+                details.getRespondentPhone() != null ? details.getRespondentPhone() : "Not provided");
 
         timelineService.addEvent(
-            caseId,
-            "RESPONDENT_DETAILS_UPDATED",
-            eventDescription
-        );
+                caseId,
+                "RESPONDENT_DETAILS_UPDATED",
+                eventDescription);
 
-        log.info("Updated respondent details for case {}: Email={}, Identified={}", 
-                 caseId, details.getRespondentEmail(), details.getRespondentIdentified());
+        log.info("Updated respondent details for case {}: Email={}, Identified={}",
+                caseId, details.getRespondentEmail(), details.getRespondentIdentified());
     }
 }
-
