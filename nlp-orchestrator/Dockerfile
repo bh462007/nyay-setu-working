@@ -30,18 +30,20 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
-# Copy virtual environment from builder
-COPY --from=builder /opt/venv /opt/venv
+# Create non-root user BEFORE copying files
+RUN useradd -m -r appuser
+
+# Copy virtual environment from builder and grant ownership
+COPY --from=builder --chown=appuser:appuser /opt/venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-# Copy application files
-COPY . .
+# Copy application files with correct ownership
+COPY --chown=appuser:appuser . .
 
 # Expose app port
 EXPOSE 8001
 
-# Create non-root user for security
-RUN useradd -m appuser && chown -R appuser /app
+# Switch to non-root user
 USER appuser
 
 # Start application
