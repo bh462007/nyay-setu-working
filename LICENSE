@@ -136,3 +136,4 @@ echo "License header injection complete!"
    ```bash
    git diff
    ```
+>>>>>>> origin/main
