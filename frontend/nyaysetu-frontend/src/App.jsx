@@ -7,6 +7,7 @@ import { ThemeProvider } from './contexts/ThemeContext.jsx';
 import ErrorBoundary from './components/ErrorBoundary';
 import LoadingSpinner from './components/LoadingSpinner';
 import ScrollToTop from './ScrollToTop';
+import ScrollProgressBar from './components/ScrollProgressBar';
 
 // PWA Components
 import OfflineIndicator from './components/OfflineIndicator';
@@ -126,6 +127,7 @@ function App({ swRegistration }) {
     return (
         // CHANGED: ThemeProvider is the outermost wrapper so the theme CSS attribute
         // is set on <html> before any child renders — prevents flash of wrong theme
+        
         <ThemeProvider>
             <ErrorBoundary>
                 <LanguageProvider>
@@ -142,6 +144,7 @@ function App({ swRegistration }) {
                         <GuestWelcomeToast />
                         <GuestOnboardingHint />
                         <ScrollToTop />
+                        <ScrollProgressBar />
                         <Suspense fallback={<LoadingSpinner fullScreen message="Loading NyaySetu..." />}>
                             <Routes>
                                 <Route path="/" element={<Landing />} />
