@@ -270,8 +270,7 @@ public class VakilFriendController {
             return ResponseEntity.status(401).build();
         }
 
-        ChatSession session = vakilFriendService.getSession(sessionId);
-        validateSessionOwnership(session, user);
+        ChatSession session = vakilFriendService.getSession(sessionId, user);
         
         ChatSessionResponse response = ChatSessionResponse.builder()
                 .sessionId(session.getId())
