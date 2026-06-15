@@ -17,16 +17,19 @@ import org.springframework.test.context.ActiveProfiles;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.test.web.servlet.RequestBuilder;
+import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.io.IOException;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 
 /**
@@ -117,9 +120,28 @@ class AuthFlowIntegrationTest {
     }
 
     private MvcResult postJson(String path, Map<String, ?> payload) {
-        return call(post(path)
+        return call(authPost(path)
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(bodyOf(payload)));
+    }
+
+    /**
+     * Builds a POST whose client IP is unique per request. The
+     * application's IP-based {@code RateLimitFilter} (5 requests per client)
+     * would otherwise throttle the many auth calls this suite makes from the
+     * single MockMvc loopback address. A distinct {@code X-Forwarded-For}
+     * per request gives each its own rate-limit bucket without disabling the
+     * real filter chain under test.
+     */
+    private MockHttpServletRequestBuilder authPost(String path) {
+        return post(path).header("X-Forwarded-For", nextClientIp());
+    }
+
+    private static final AtomicInteger IP_SEQUENCE = new AtomicInteger();
+
+    private static String nextClientIp() {
+        int n = IP_SEQUENCE.incrementAndGet();
+        return "10.10." + ((n >> 8) & 0xFF) + "." + (n & 0xFF);
     }
 
     /** Registers a LITIGANT through the public endpoint and asserts success. */
@@ -299,7 +321,7 @@ class AuthFlowIntegrationTest {
 
     @Test
     void refresh_withMissingRefreshToken_isRejectedByValidation() {
-        MvcResult result = call(post("/api/v1/auth/refresh")
+        MvcResult result = call(authPost("/api/v1/auth/refresh")
                 .contentType(MediaType.APPLICATION_JSON)
                 .content("{}"));
 

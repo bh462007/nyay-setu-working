@@ -121,7 +121,7 @@ class HearingControllerTest {
 
     private static class FakeCaseAccessService extends CaseAccessService {
         FakeCaseAccessService() {
-            super(null, null);
+            super(null);
         }
     }
 }
