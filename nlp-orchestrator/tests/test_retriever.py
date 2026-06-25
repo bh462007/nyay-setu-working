@@ -26,7 +26,6 @@ os.environ.setdefault("GROQ_API_KEY", "test-key")
 from services.retrieval import retriever  # noqa: E402
 from services.retrieval.retriever import RetrievedChunk  # noqa: E402
 
-
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
 
